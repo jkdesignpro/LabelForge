@@ -24,7 +24,7 @@ fn example_label() -> String {
 
 /// Show an Open dialog and load a label. Returns `null` if cancelled.
 #[tauri::command]
-fn open_label(app: tauri::AppHandle) -> Result<Option<(String, Label)>, String> {
+async fn open_label(app: tauri::AppHandle) -> Result<Option<(String, Label)>, String> {
     let Some(path) = app.dialog().file().add_filter("LabelForge label", &["lfl"]).blocking_pick_file() else {
         return Ok(None);
     };
@@ -36,7 +36,7 @@ fn open_label(app: tauri::AppHandle) -> Result<Option<(String, Label)>, String> 
 /// Save a label. With no path (or `save_as`), shows a Save dialog first.
 /// Returns the path written, or `null` if cancelled.
 #[tauri::command]
-fn save_label(app: tauri::AppHandle, label: Label, path: Option<String>) -> Result<Option<String>, String> {
+async fn save_label(app: tauri::AppHandle, label: Label, path: Option<String>) -> Result<Option<String>, String> {
     let path = match path {
         Some(p) if !p.is_empty() => std::path::PathBuf::from(p),
         _ => {
@@ -58,7 +58,7 @@ fn save_label(app: tauri::AppHandle, label: Label, path: Option<String>) -> Resu
 
 /// Save an exported file (SVG) chosen by the user.
 #[tauri::command]
-fn export_file(app: tauri::AppHandle, name: String, ext: String, contents: String) -> Result<Option<String>, String> {
+async fn export_file(app: tauri::AppHandle, name: String, ext: String, contents: String) -> Result<Option<String>, String> {
     let Some(p) = app.dialog().file().add_filter(&ext.to_uppercase(), &[ext.as_str()]).set_file_name(name).blocking_save_file() else {
         return Ok(None);
     };

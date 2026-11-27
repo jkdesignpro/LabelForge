@@ -41,5 +41,6 @@ scan the barcodes with a phone or scanner. Record the result here.
 
 | Date | Version | Printer | Path | Result |
 |---|---|---|---|---|
+| 2026-11-27 | 0.1.0 | (none, Linux desktop app launch check under Xvfb) | n/a | App starts, designer renders through the Rust core |
 | | | Godex 600 dpi | System driver | not yet tested |
 | | | Rebo SMS-R1 | System driver | not yet tested |
