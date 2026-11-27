@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["crates/labelforge-core", "crates/labelforge-dev", "src-tauri"]
+default-members = ["crates/labelforge-core", "crates/labelforge-dev", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+license = "AGPL-3.0-or-later"

@@ -1,0 +1,116 @@
+<!doctype html>
+<!-- LabelForge. Free software under the GNU AGPL v3 or later. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LabelForge</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header class="toolbar">
+    <span class="brand">LabelForge</span>
+    <button data-act="new" title="New label (Ctrl+N)">New</button>
+    <button data-act="open" title="Open (Ctrl+O)">Open</button>
+    <button data-act="save" title="Save (Ctrl+S)">Save</button>
+    <button data-act="saveas">Save as</button>
+    <button data-act="example">Example</button>
+    <span class="sep"></span>
+    <button data-act="undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button data-act="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+    <span class="sep"></span>
+    <button data-act="dup" title="Duplicate (Ctrl+D)">Duplicate</button>
+    <button data-act="del" title="Delete (Del)">Delete</button>
+    <button data-act="front">To front</button>
+    <button data-act="back">To back</button>
+    <span class="sep"></span>
+    <label class="inline"><input type="checkbox" id="snap" checked> Snap 0.5 mm</label>
+    <label class="inline">Zoom <select id="zoom">
+      <option value="fit" selected>Fit</option><option value="1">100%</option><option value="2">200%</option><option value="3">300%</option><option value="4">400%</option>
+      <option value="6">600%</option><option value="8">800%</option></select></label>
+    <span class="grow"></span>
+    <select id="exportfmt" title="Export"><option value="">Export…</option><option value="png">PNG (this label)</option><option value="pdf">PDF (print run)</option><option value="svg">SVG (this label)</option></select>
+    <button data-act="print" class="primary" title="Print (Ctrl+P)">Print…</button>
+  </header>
+
+  <aside class="palette">
+    <h3>Add</h3>
+    <button data-add="text">Text</button>
+    <button data-add="barcode">Barcode</button>
+    <button data-add="qr">QR code</button>
+    <button data-add="datamatrix">Data Matrix</button>
+    <button data-add="rect">Rectangle</button>
+    <button data-add="ellipse">Ellipse</button>
+    <button data-add="line">Line</button>
+    <button data-add="image">Image…</button>
+    <input type="file" id="imagefile" accept="image/png,image/jpeg,image/svg+xml" hidden>
+    <input type="file" id="openfile" accept=".lfl,application/json" hidden>
+
+    <h3>Label</h3>
+    <div class="form" id="labelform">
+      <label>Name <input data-l="name"></label>
+      <label>Width mm <input type="number" step="0.1" min="5" data-l="width_mm"></label>
+      <label>Height mm <input type="number" step="0.1" min="5" data-l="height_mm"></label>
+      <label>Corner mm <input type="number" step="0.1" min="0" data-l="corner_radius_mm"></label>
+      <label>Printer dpi <select data-l="dpi"><option>203</option><option>300</option><option>600</option></select></label>
+    </div>
+
+    <h3>Objects</h3>
+    <ol id="objlist"></ol>
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="paper" id="paper">
+      <div id="svghost"></div>
+      <div id="overlay"></div>
+    </div>
+  </main>
+
+  <aside class="props">
+    <h3>Properties</h3>
+    <div id="props" class="form"><p class="hint">Select an object, or add one from the left.</p></div>
+
+    <h3>Variables <button class="small" id="addvar">+ Add</button></h3>
+    <p class="hint">Use <code>{name}</code> in text and barcode data.</p>
+    <div id="vars"></div>
+    <details class="help">
+      <summary>Pattern tokens</summary>
+      <table>
+        <tr><td><code>{SEQ:0000}</code></td><td>counter, 4 digits</td></tr>
+        <tr><td><code>{SEQ36:4}</code></td><td>counter 0-9A-Z</td></tr>
+        <tr><td><code>{SEQAZ:3}</code></td><td>counter A-Z</td></tr>
+        <tr><td><code>{YYYY} {YY} {MM} {DD}</code></td><td>date</td></tr>
+        <tr><td><code>{HH} {NN} {SS}</code></td><td>time</td></tr>
+        <tr><td><code>{JJJ} {WW}</code></td><td>day of year, week</td></tr>
+        <tr><td><code>{CHK:MOD10}</code></td><td>GS1 check digit</td></tr>
+        <tr><td><code>{CHK:LUHN} {CHK:MOD43}</code></td><td>other checks</td></tr>
+        <tr><td><code>{part}</code></td><td>another variable</td></tr>
+      </table>
+      <p>Example: <code>LF-{YY}{MM}-{SEQ:0000}-A</code> → <code>LF-2611-0042-A</code></p>
+    </details>
+  </aside>
+
+  <footer class="status" id="status">Ready</footer>
+</div>
+
+<dialog id="printdlg">
+  <form method="dialog" class="form">
+    <h2>Print</h2>
+    <div id="promptfields"></div>
+    <label>Quantity <input type="number" id="pqty" min="1" max="10000" value="1"></label>
+    <label>First serial position <input type="number" id="pstart" min="0" value="0"></label>
+    <p class="hint">Serial variables count from their start value plus this position.</p>
+    <div class="previewrow"><div><b>First</b><div id="pfirst" class="pprev"></div></div><div><b>Last</b><div id="plast" class="pprev"></div></div></div>
+    <p id="perr" class="err"></p>
+    <menu>
+      <button value="cancel">Cancel</button>
+      <button id="pgo" value="default" class="primary">Print</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="printroot"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

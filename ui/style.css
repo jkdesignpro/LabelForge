@@ -1,0 +1,84 @@
+/* LabelForge. Free software under the GNU AGPL v3 or later.
+   Plain workshop look: flat panels, square corners, clear borders. */
+:root {
+  --bg: #e9e7e2;
+  --panel: #f7f6f3;
+  --ink: #1c1c1c;
+  --muted: #666;
+  --line: #b9b5ac;
+  --accent: #1f5fa8;
+  --sel: #1f5fa8;
+  --err: #b3261e;
+  font: 13px/1.35 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+#app {
+  display: grid; height: 100vh;
+  grid-template-columns: 210px 1fr 290px;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas: "tb tb tb" "pal stage props" "st st st";
+}
+.toolbar { grid-area: tb; display: flex; gap: 4px; align-items: center; padding: 6px 8px; background: #2b2b2b; color: #eee; flex-wrap: wrap; }
+.toolbar .brand { font-weight: 700; letter-spacing: .04em; margin-right: 10px; }
+.toolbar .sep { width: 1px; height: 22px; background: #555; margin: 0 4px; }
+.toolbar .grow { flex: 1; }
+.toolbar label.inline { display: inline-flex; gap: 4px; align-items: center; margin: 0 4px; }
+button {
+  font: inherit; padding: 4px 9px; border: 1px solid var(--line); border-radius: 2px;
+  background: #fff; color: var(--ink); cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.small { padding: 1px 6px; font-size: 12px; }
+.toolbar button { background: #3a3a3a; border-color: #555; color: #eee; }
+.toolbar button.primary { background: var(--accent); border-color: var(--accent); }
+.palette, .props { background: var(--panel); overflow: auto; padding: 8px 10px; border-right: 1px solid var(--line); }
+.props { grid-area: props; border-right: 0; border-left: 1px solid var(--line); }
+.palette { grid-area: pal; display: flex; flex-direction: column; gap: 4px; }
+.palette > button { text-align: left; }
+h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 12px 0 4px; display: flex; justify-content: space-between; align-items: center; }
+.form label { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 6px; margin: 3px 0; }
+.form label.check { grid-template-columns: 92px auto; }
+.form input, .form select, .form textarea { font: inherit; padding: 3px 5px; border: 1px solid var(--line); border-radius: 2px; background: #fff; min-width: 0; width: 100%; }
+.form input[type=checkbox] { width: auto; }
+.form textarea { resize: vertical; min-height: 48px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.hint { color: var(--muted); font-size: 12px; margin: 4px 0; }
+code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; background: #ecebe6; padding: 0 3px; }
+#objlist { margin: 0; padding-left: 20px; }
+#objlist li { cursor: pointer; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#objlist li.on { background: var(--sel); color: #fff; }
+.stage { grid-area: stage; overflow: auto; display: flex; padding: 40px; }
+.paper { position: relative; margin: auto; background: transparent; }
+#svghost svg { display: block; }
+#overlay { position: absolute; inset: 0; }
+.hit { position: absolute; cursor: move; }
+.hit.locked { cursor: not-allowed; }
+.hit.on { outline: 1px solid var(--sel); outline-offset: 0; }
+.hit .grip { position: absolute; right: -5px; bottom: -5px; width: 9px; height: 9px; background: #fff; border: 1px solid var(--sel); cursor: nwse-resize; }
+.status { grid-area: st; padding: 3px 10px; background: #d9d6cf; border-top: 1px solid var(--line); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status.err, .err { color: var(--err); }
+.var { border: 1px solid var(--line); background: #fff; padding: 4px 6px; margin: 4px 0; }
+.var .row { display: flex; gap: 4px; align-items: center; }
+.var .row input { flex: 1 1 auto; width: auto; }
+.var .row select { flex: 0 0 140px; width: 140px; }
+.help table { border-collapse: collapse; font-size: 12px; }
+.help td { padding: 1px 4px; vertical-align: top; }
+dialog { border: 1px solid var(--line); border-radius: 2px; padding: 14px 18px; min-width: 420px; max-width: 90vw; }
+dialog h2 { margin: 0 0 8px; font-size: 16px; }
+dialog menu { display: flex; justify-content: flex-end; gap: 6px; padding: 0; margin: 10px 0 0; }
+.previewrow { display: flex; gap: 12px; }
+.pprev svg { width: 180px; height: auto; border: 1px solid var(--line); background: #fff; }
+#printroot { display: none; }
+
+@media print {
+  #app, dialog { display: none !important; }
+  #printroot { display: block; }
+  #printroot .page { page-break-after: always; break-after: page; overflow: hidden; }
+  #printroot .page:last-child { page-break-after: auto; break-after: auto; }
+  #printroot svg { display: block; }
+  body { background: #fff; margin: 0; }
+}
+details.rules { margin: 4px 0; }
+details.rules summary { cursor: pointer; color: var(--muted); font-size: 12px; }

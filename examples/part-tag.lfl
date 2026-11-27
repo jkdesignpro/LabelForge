@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "name": "Machine shop part tag",
+  "width_mm": 100.0,
+  "height_mm": 50.0,
+  "corner_radius_mm": 2.0,
+  "dpi": 600,
+  "variables": [
+    { "name": "part", "source": "prompt", "prompt": "Part number", "default": "10098101" },
+    { "name": "material", "source": "prompt", "prompt": "Material", "default": "303 stainless" },
+    { "name": "sn", "source": "serial", "pattern": "LF-{YY}{MM}-{SEQ:0000}", "start": 1, "step": 1 },
+    { "name": "date", "source": "date", "pattern": "{DD}/{MM}/{YYYY}" }
+  ],
+  "objects": [
+    { "id": "frame", "x_mm": 1.5, "y_mm": 1.5, "w_mm": 97.0, "h_mm": 47.0,
+      "kind": { "type": "rect", "stroke_mm": 0.4, "stroke": "#000000", "fill": "", "radius_mm": 1.5 } },
+    { "id": "title", "x_mm": 4.0, "y_mm": 4.0, "w_mm": 60.0, "h_mm": 8.0,
+      "kind": { "type": "text", "text": "PART {part}", "font": "Helvetica", "size_pt": 18.0, "bold": true, "color": "#000000" } },
+    { "id": "mat", "x_mm": 4.0, "y_mm": 13.0, "w_mm": 60.0, "h_mm": 5.0,
+      "kind": { "type": "text", "text": "Material: {material}\nDate: {date}", "font": "Helvetica", "size_pt": 9.0, "color": "#000000" } },
+    { "id": "rule", "x_mm": 4.0, "y_mm": 23.0, "w_mm": 60.0, "h_mm": 0.0,
+      "kind": { "type": "line", "stroke_mm": 0.3, "stroke": "#000000" } },
+    { "id": "code", "x_mm": 4.0, "y_mm": 26.0, "w_mm": 60.0, "h_mm": 20.0,
+      "kind": { "type": "barcode", "symbology": "code128", "data": "{sn}", "show_text": true, "text_size_pt": 8.0 } },
+    { "id": "qr", "x_mm": 68.0, "y_mm": 4.0, "w_mm": 28.0, "h_mm": 28.0,
+      "kind": { "type": "barcode", "symbology": "qr", "data": "{part};{sn}", "qr_ecc": "M" } },
+    { "id": "sntext", "x_mm": 68.0, "y_mm": 36.0, "w_mm": 28.0, "h_mm": 8.0,
+      "kind": { "type": "text", "text": "{sn}", "font": "Helvetica", "size_pt": 9.0, "bold": true, "align": "center", "color": "#000000", "inverse": true } }
+  ]
+}
