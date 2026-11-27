@@ -1,0 +1,11 @@
+[package]
+name = "labelforge-dev"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Tiny local server that serves the LabelForge UI in a browser, for development and automated UI tests only"
+publish = false
+
+[dependencies]
+labelforge-core = { path = "../labelforge-core" }
+serde_json = "1"

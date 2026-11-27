@@ -1,0 +1,17 @@
+{
+  "name": "labelforge",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "LabelForge label designer. npm is only used to run the Tauri build tool.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:mac-universal": "tauri build --target universal-apple-darwin",
+    "icons": "tauri icon src-tauri/icons/icon.png",
+    "devserver": "cargo run -p labelforge-dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0"
+  }
+}
