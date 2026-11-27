@@ -72,6 +72,22 @@ async fn export_file(app: tauri::AppHandle, name: String, ext: String, contents:
     Ok(Some(p.display().to_string()))
 }
 
+/// Export PNG (one label) or PDF (the whole run) through a Save dialog.
+#[tauri::command]
+async fn export_binary(app: tauri::AppHandle, format: String, name: String, req: serde_json::Value) -> Result<Option<String>, String> {
+    let bytes = match format.as_str() {
+        "png" => api::png(serde_json::from_value(req).map_err(|e| e.to_string())?)?,
+        "pdf" => api::pdf(serde_json::from_value(req).map_err(|e| e.to_string())?)?,
+        _ => return Err(format!("Unknown export format {format}")),
+    };
+    let Some(p) = app.dialog().file().add_filter(&format.to_uppercase(), &[format.as_str()]).set_file_name(name).blocking_save_file() else {
+        return Ok(None);
+    };
+    let p = p.into_path().map_err(|e| e.to_string())?;
+    std::fs::write(&p, bytes).map_err(|e| e.to_string())?;
+    Ok(Some(p.display().to_string()))
+}
+
 /// Open the system print dialog for the current page (print view).
 #[tauri::command]
 fn print_page(window: tauri::WebviewWindow) -> Result<(), String> {
@@ -81,7 +97,7 @@ fn print_page(window: tauri::WebviewWindow) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![render, render_run, symbologies, example_label, open_label, save_label, export_file, print_page])
+        .invoke_handler(tauri::generate_handler![render, render_run, symbologies, example_label, open_label, save_label, export_file, export_binary, print_page])
         .run(tauri::generate_context!())
         .expect("error while running LabelForge");
 }

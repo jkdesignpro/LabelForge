@@ -120,7 +120,7 @@ fn render_object(o: &Object, values: &HashMap<String, String>, dpi: u32, s: &mut
             let color = if t.inverse { "#ffffff".to_string() } else { t.color.clone() };
             let _ = write!(
                 s,
-                r#"<text font-family="{}" font-size="{}" font-weight="{}" font-style="{}" fill="{}" text-anchor="{}" xml:space="preserve">"#,
+                r#"<text font-family="{}, Helvetica, Arial, sans-serif" font-size="{}" font-weight="{}" font-style="{}" fill="{}" text-anchor="{}" xml:space="preserve">"#,
                 esc(&t.font), n(size),
                 if t.bold { "bold" } else { "normal" },
                 if t.italic { "italic" } else { "normal" },

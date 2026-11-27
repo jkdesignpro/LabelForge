@@ -71,3 +71,32 @@ pub fn render_run(req: RunRequest) -> Result<Vec<RenderResponse>, String> {
 pub fn symbologies() -> serde_json::Value {
     serde_json::to_value(crate::barcode::SYMBOLOGIES).unwrap()
 }
+
+/// PNG of one label at `dpi` (no outline).
+#[derive(Deserialize)]
+pub struct PngRequest {
+    #[serde(flatten)]
+    pub render: RenderRequest,
+    #[serde(default = "default_dpi")]
+    pub dpi: f64,
+}
+
+fn default_dpi() -> f64 {
+    300.0
+}
+
+pub fn png(req: PngRequest) -> Result<Vec<u8>, String> {
+    let mut r = req.render;
+    r.outline = false;
+    let out = render(r);
+    if !out.errors.is_empty() {
+        return Err(out.errors.join("; "));
+    }
+    crate::raster::png(&out.svg, req.dpi)
+}
+
+/// PDF with one page per label in the run.
+pub fn pdf(req: RunRequest) -> Result<Vec<u8>, String> {
+    let pages: Vec<String> = render_run(req)?.into_iter().map(|p| p.svg).collect();
+    crate::raster::pdf(&pages)
+}

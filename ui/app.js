@@ -481,6 +481,26 @@ function download(name, text, type) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+async function exportAs(fmt) {
+  if (fmt === 'svg') return exportSvg();
+  const L = state.label;
+  const req = fmt === 'png'
+    ? { label: L, inputs: {}, index: 0, outline: false, dpi: L.dpi || 300 }
+    : { label: L, inputs: {}, index: 0, quantity: 1 };
+  try {
+    if (TAURI) {
+      const p = await call('export_binary', { format: fmt, name: `${L.name}.${fmt}`, req });
+      if (p) status('Exported ' + p);
+    } else {
+      const b64 = await call(fmt, req);
+      const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([bin], { type: fmt === 'png' ? 'image/png' : 'application/pdf' }));
+      a.download = `${L.name}.${fmt}`;
+      a.click();
+    }
+  } catch (e) { status('Export failed: ' + e, true); }
+}
 async function exportSvg() {
   const res = await call('render', { req: { label: state.label, inputs: {}, index: 0, outline: false } });
   if (TAURI) {
@@ -578,6 +598,7 @@ $('#labelform').addEventListener('change', (e) => {
   if (k !== 'name') { v = parseFloat(v); if (!isFinite(v) || v < 0) return; }
   mutate((l) => { l[k] = v; });
 });
+$('#exportfmt').addEventListener('change', (e) => { const f = e.target.value; e.target.value = ''; if (f) exportAs(f); });
 $('#zoom').addEventListener('change', (e) => { state.fit = e.target.value === 'fit'; if (!state.fit) state.zoom = parseFloat(e.target.value); refresh(); });
 $('#addvar').onclick = () => {
   let i = 1;

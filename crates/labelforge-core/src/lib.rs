@@ -5,6 +5,7 @@ pub mod api;
 pub mod barcode;
 pub mod model;
 pub mod pattern;
+pub mod raster;
 pub mod render;
 
 pub use model::*;
