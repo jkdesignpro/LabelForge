@@ -48,6 +48,7 @@ fn handle(mut s: TcpStream, root: &Path) -> std::io::Result<()> {
                 .map_err(|e| e.to_string())
                 .and_then(api::render_run)
                 .map(|r| serde_json::to_value(r).unwrap()),
+            "symbologies" => Ok(api::symbologies()),
             "example_label" => Ok(serde_json::Value::String(include_str!("../../../examples/part-tag.lfl").into())),
             _ => Err("unknown command".into()),
         };

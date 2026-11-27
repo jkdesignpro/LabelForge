@@ -14,10 +14,22 @@ const call = async (cmd, args = {}) => {
 const $ = (s) => document.querySelector(s);
 const MM_PX = 96 / 25.4; // CSS pixels per millimetre at 100%
 
-const SYMBOLOGIES = [
-  ['code128', 'Code 128'], ['code39', 'Code 39'], ['code93', 'Code 93'], ['ean13', 'EAN-13'],
-  ['ean8', 'EAN-8'], ['itf', 'Interleaved 2 of 5'], ['qr', 'QR Code'], ['datamatrix', 'Data Matrix'],
+// Filled from the core at start-up: [{key, name, group, example}].
+let SYMBOLOGIES = [];
+const SYM_GROUPS = { linear: 'Linear', retail: 'Retail (EAN/UPC)', gs1: 'GS1', two_d: '2D', stacked: 'Stacked', hibc: 'HIBC (health)', postal: 'Postal', other: 'Other' };
+const symName = (key) => (SYMBOLOGIES.find((s) => s.key === key) || { name: key }).name;
+const symInfo = (key) => SYMBOLOGIES.find((s) => s.key === key) || { key, name: key, group: 'other', example: '' };
+// Common GS1 Application Identifiers for the data helper.
+const GS1_AIS = [
+  ['00', 'SSCC (18 digits)'], ['01', 'GTIN (14 digits)'], ['02', 'GTIN of contents'], ['10', 'Batch / lot'],
+  ['11', 'Production date YYMMDD'], ['13', 'Packaging date YYMMDD'], ['15', 'Best before YYMMDD'],
+  ['17', 'Expiry date YYMMDD'], ['20', 'Variant'], ['21', 'Serial number'], ['22', 'Consumer product variant'],
+  ['30', 'Count of items'], ['37', 'Count of trade items'], ['240', 'Additional product ID'],
+  ['241', 'Customer part number'], ['250', 'Secondary serial'], ['3100', 'Net weight kg (0 dp)'],
+  ['3102', 'Net weight kg (2 dp)'], ['3300', 'Gross weight kg'], ['400', 'Customer order number'],
+  ['410', 'Ship to GLN'], ['420', 'Ship to postcode'], ['7003', 'Expiry date and time'], ['8004', 'GIAI asset ID'],
 ];
+
 
 const blankLabel = () => ({
   schema: 1, name: 'Untitled', width_mm: 100, height_mm: 50, corner_radius_mm: 2, dpi: 600, objects: [], variables: [],
@@ -84,7 +96,7 @@ function describe(o) {
   const k = o.kind;
   switch (k.type) {
     case 'text': return 'Text: ' + k.text.split('\n')[0];
-    case 'barcode': return (SYMBOLOGIES.find((s) => s[0] === k.symbology) || ['', k.symbology])[1] + ': ' + k.data;
+    case 'barcode': return symName(k.symbology) + ': ' + k.data;
     case 'image': return 'Image';
     default: return k.type[0].toUpperCase() + k.type.slice(1);
   }
@@ -201,13 +213,30 @@ function renderProps() {
     h += field('Inverse', 'kind.inverse', k.inverse, 'checkbox');
     h += '<datalist id="fonts"><option>Helvetica</option><option>Arial</option><option>Arial Narrow</option><option>DIN Alternate</option><option>Courier New</option><option>Times New Roman</option><option>Verdana</option></datalist>';
   } else if (k.type === 'barcode') {
-    h += select_('Type', 'kind.symbology', k.symbology, SYMBOLOGIES);
+    const info = symInfo(k.symbology);
+    h += `<label>Type <select data-k="kind.symbology">${Object.entries(SYM_GROUPS).map(([g, gname]) => {
+      const list = SYMBOLOGIES.filter((x) => x.group === g);
+      return list.length ? `<optgroup label="${gname}">${list.map((x) => `<option value="${x.key}" ${x.key === k.symbology ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>` : '';
+    }).join('')}</select></label>`;
     h += field('Data', 'kind.data', k.data, 'textarea', 'rows="2"');
-    if (k.symbology === 'qr') h += select_('Error corr.', 'kind.qr_ecc', k.qr_ecc || 'M', [['L', 'L (7%)'], ['M', 'M (15%)'], ['Q', 'Q (25%)'], ['H', 'H (30%)']]);
-    if (k.symbology !== 'qr' && k.symbology !== 'datamatrix') {
-      h += field('Show text', 'kind.show_text', k.show_text, 'checkbox');
-      h += field('Text pt', 'kind.text_size_pt', k.text_size_pt, 'number', 'step="0.5" min="4"');
+    h += `<p class="hint">Example: <code>${esc(info.example)}</code> <button class="small" id="useexample">Use</button></p>`;
+    if (info.key.startsWith('gs1_') || info.key.startsWith('databar_expanded')) {
+      h += `<label>Add AI <select id="gs1ai"><option value="">Pick an Application Identifier…</option>${GS1_AIS.map(([a, t]) => `<option value="${a}">(${a}) ${t}</option>`).join('')}</select></label>`;
     }
+    const ecc = {
+      qr: [['', 'Auto'], ['L', 'L (7%)'], ['M', 'M (15%)'], ['Q', 'Q (25%)'], ['H', 'H (30%)']],
+      aztec: [['', 'Auto'], ['1', '1 (10%)'], ['2', '2 (23%)'], ['3', '3 (36%)'], ['4', '4 (50%)']],
+      pdf: [['', 'Auto'], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((v) => [String(v), 'Level ' + v])],
+    };
+    const eccKind = /qr|rmqr/.test(k.symbology) ? 'qr' : /aztec/.test(k.symbology) ? 'aztec' : /^(pdf417|pdf417_compact|hibc_pdf417)$/.test(k.symbology) ? 'pdf' : null;
+    if (eccKind) h += select_('Error corr.', 'kind.qr_ecc', k.qr_ecc || '', ecc[eccKind]);
+    if (/pdf417/.test(k.symbology)) h += field('Columns', 'kind.columns', k.columns || 0, 'number', 'min="0" max="30" step="1"');
+    if (k.symbology === 'maxicode') {
+      h += select_('Mode', 'kind.maxi_mode', String(k.maxi_mode || 0), [['0', 'Auto (4)'], ['2', '2 (US postcode)'], ['3', '3 (intl postcode)'], ['4', '4 (standard)'], ['5', '5 (full ECC)'], ['6', '6 (reader prog.)']]);
+      if (k.maxi_mode === 2 || k.maxi_mode === 3) h += field('Primary', 'kind.maxi_primary', k.maxi_primary || '');
+    }
+    if (!['two_d'].includes(info.group) && !/datamatrix|_qr|aztec|maxicode/.test(k.symbology)) h += field('Show text', 'kind.show_text', k.show_text, 'checkbox');
+    h += field('Quiet zone', 'kind.quiet_zone', !!k.quiet_zone, 'checkbox');
     h += field('Colour', 'kind.color', k.color, 'color');
   } else if (k.type === 'rect' || k.type === 'ellipse' || k.type === 'line') {
     h += field('Line mm', 'kind.stroke_mm', k.stroke_mm, 'number', 'step="0.05" min="0"');
@@ -221,6 +250,10 @@ function renderProps() {
     h += '<button id="replaceimg">Replace image…</button>';
   }
   p.innerHTML = h;
+  const ue = $('#useexample');
+  if (ue) ue.onclick = () => { mutate(() => { o.kind.data = symInfo(o.kind.symbology).example; }); p.dataset.id = ''; renderProps(); };
+  const ai = $('#gs1ai');
+  if (ai) ai.onchange = () => { if (ai.value) { mutate(() => { o.kind.data += `(${ai.value})`; }); p.dataset.id = ''; renderProps(); } };
   const ri = $('#replaceimg');
   if (ri) ri.onclick = () => { imageTarget = o.id; $('#imagefile').click(); };
 }
@@ -232,7 +265,7 @@ function onPropInput(e) {
   const o = obj(state.sel);
   if (!o) return;
   let v = el.type === 'checkbox' ? el.checked : el.value;
-  if (el.type === 'number' || key === 'rotation') {
+  if (el.type === 'number' || key === 'rotation' || key === 'kind.maxi_mode') {
     v = parseFloat(v);
     if (!isFinite(v)) return;
   }
@@ -242,7 +275,7 @@ function onPropInput(e) {
     else o[key] = v;
   });
   // Structure-changing fields rebuild the panel.
-  if (['kind.symbology', 'fillon', 'locked'].includes(key)) { $('#props').dataset.id = ''; document.activeElement.blur(); renderProps(); }
+  if (['kind.symbology', 'kind.maxi_mode', 'fillon', 'locked'].includes(key)) { $('#props').dataset.id = ''; document.activeElement.blur(); renderProps(); }
 }
 
 // ---------- variables ----------
@@ -314,6 +347,7 @@ function select(id) {
 }
 
 // ---------- adding objects ----------
+const barcodeKind = (symbology, data) => ({ type: 'barcode', symbology, data, show_text: true, text_size_pt: 8, qr_ecc: '', columns: 0, maxi_mode: 0, maxi_primary: '', quiet_zone: false, color: '#000000' });
 let imageTarget = null;
 function add(type) {
   const L = state.label;
@@ -321,9 +355,9 @@ function add(type) {
   const sh = { stroke_mm: 0.3, stroke: '#000000', fill: '', radius_mm: 0 };
   switch (type) {
     case 'text': o.id = newId('text'); o.kind = { type: 'text', text: 'Text', font: 'Helvetica', size_pt: 12, bold: false, italic: false, align: 'left', color: '#000000', inverse: false }; o.w_mm = 40; o.h_mm = 6; break;
-    case 'barcode': o.id = newId('barcode'); o.kind = { type: 'barcode', symbology: 'code128', data: '12345678', show_text: true, text_size_pt: 8, qr_ecc: 'M', color: '#000000' }; o.w_mm = 45; o.h_mm = 15; break;
-    case 'qr': o.id = newId('qr'); o.kind = { type: 'barcode', symbology: 'qr', data: 'https://example.com', show_text: false, text_size_pt: 8, qr_ecc: 'M', color: '#000000' }; o.w_mm = o.h_mm = 20; break;
-    case 'datamatrix': o.id = newId('dm'); o.kind = { type: 'barcode', symbology: 'datamatrix', data: 'LF-0001', show_text: false, text_size_pt: 8, qr_ecc: 'M', color: '#000000' }; o.w_mm = o.h_mm = 12; break;
+    case 'barcode': o.id = newId('barcode'); o.kind = barcodeKind('code128', '12345678'); o.w_mm = 45; o.h_mm = 15; break;
+    case 'qr': o.id = newId('qr'); o.kind = barcodeKind('qr', 'https://example.com'); o.w_mm = o.h_mm = 20; break;
+    case 'datamatrix': o.id = newId('dm'); o.kind = barcodeKind('datamatrix', 'LF-0001'); o.w_mm = o.h_mm = 12; break;
     case 'rect': o.id = newId('rect'); o.kind = { type: 'rect', ...sh }; o.h_mm = 15; break;
     case 'ellipse': o.id = newId('ellipse'); o.kind = { type: 'ellipse', ...sh }; o.w_mm = o.h_mm = 15; break;
     case 'line': o.id = newId('line'); o.kind = { type: 'line', ...sh }; o.h_mm = 0; break;
@@ -572,4 +606,4 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('beforeunload', (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
-refresh();
+call('symbologies').then((list) => { SYMBOLOGIES = list; refresh(); }).catch((e) => { status('Could not load barcode types: ' + e, true); refresh(); });

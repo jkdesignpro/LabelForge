@@ -18,6 +18,11 @@ fn render_run(req: serde_json::Value) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+fn symbologies() -> serde_json::Value {
+    api::symbologies()
+}
+
+#[tauri::command]
 fn example_label() -> String {
     include_str!("../../examples/part-tag.lfl").to_string()
 }
@@ -76,7 +81,7 @@ fn print_page(window: tauri::WebviewWindow) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![render, render_run, example_label, open_label, save_label, export_file, print_page])
+        .invoke_handler(tauri::generate_handler![render, render_run, symbologies, example_label, open_label, save_label, export_file, print_page])
         .run(tauri::generate_context!())
         .expect("error while running LabelForge");
 }

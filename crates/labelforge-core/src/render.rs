@@ -3,7 +3,7 @@
 //! The SVG is used for the on-screen designer, print preview, printing
 //! through the system driver, and PDF/PNG export.
 
-use crate::barcode::{self, Encoded};
+use crate::barcode;
 use crate::model::*;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -169,53 +169,44 @@ fn render_object(o: &Object, values: &HashMap<String, String>, dpi: u32, s: &mut
         }
         Kind::Barcode(b) => {
             let data = fill(&b.data, values);
-            let color = esc(&b.color);
-            match barcode::encode(b.symbology, &data, &b.qr_ecc)? {
-                Encoded::Linear { modules, text } => {
-                    let text_h = if b.show_text { b.text_size_pt * PT_TO_MM * 1.15 } else { 0.0 };
-                    let bar_h = (h - text_h).max(1.0);
-                    // Whole printer dots per module keeps every bar the same width when
-                    // printed, which matters for scanning. Bars are centred in the box.
-                    let mw = dot_snap(w / modules.len() as f64, dpi);
-                    let x = x + (w - mw * modules.len() as f64) / 2.0;
-                    let _ = write!(s, r#"<path fill="{}" shape-rendering="crispEdges" d=""#, color);
-                    let mut i = 0;
-                    while i < modules.len() {
-                        if modules[i] {
-                            let start = i;
-                            while i < modules.len() && modules[i] {
-                                i += 1;
-                            }
-                            let _ = write!(s, "M{} {}h{}v{}h-{}z", n(x + start as f64 * mw), n(y), n((i - start) as f64 * mw), n(bar_h), n((i - start) as f64 * mw));
-                        } else {
-                            i += 1;
-                        }
-                    }
-                    s.push_str(r#""/>"#);
-                    if b.show_text {
-                        let _ = write!(
-                            s,
-                            r#"<text x="{}" y="{}" font-family="Helvetica" font-size="{}" fill="{}" text-anchor="middle">{}</text>"#,
-                            n(x + w / 2.0), n(y + h - 0.2), n(b.text_size_pt * PT_TO_MM), color, esc(&text)
-                        );
-                    }
-                }
-                Encoded::Matrix { width, height, cells } => {
-                    // Keep modules square and centred in the box.
-                    let m = dot_snap((w / width as f64).min(h / height as f64), dpi);
-                    let ox = x + (w - m * width as f64) / 2.0;
-                    let oy = y + (h - m * height as f64) / 2.0;
-                    let _ = write!(s, r#"<path fill="{}" shape-rendering="crispEdges" d=""#, color);
-                    for r in 0..height {
-                        for c in 0..width {
-                            if cells[r * width + c] {
-                                let _ = write!(s, "M{} {}h{}v{}h-{}z", n(ox + c as f64 * m), n(oy + r as f64 * m), n(m), n(m), n(m));
-                            }
-                        }
-                    }
-                    s.push_str(r#""/>"#);
-                }
-            }
+            let opts = |bar_height: f64| barcode::Options {
+                show_text: b.show_text,
+                ecc: &b.qr_ecc,
+                columns: b.columns,
+                maxi_mode: b.maxi_mode,
+                maxi_primary: &b.maxi_primary,
+                bar_height,
+                quiet_zone: b.quiet_zone,
+            };
+            let first = barcode::encode(&b.symbology, &data, &opts(0.0))?;
+            let unit = 1.0; // Zint units per module (set by the shim)
+            let z = if first.fixed_ratio {
+                first
+            } else {
+                // Fit the width, then re-encode with the bar height that fills the box.
+                let module_mm = dot_snap(w / (first.width / unit), dpi);
+                let extra = first.height / unit - first.bar_height; // text, guards, row gaps
+                let rows = first.rows.max(1) as f64;
+                let want = (h / module_mm - extra).max(rows);
+                barcode::encode(&b.symbology, &data, &opts(want))?
+            };
+            let width_mod = z.width / unit;
+            let height_mod = z.height / unit;
+            // Whole printer dots per module keeps every bar the same width when
+            // printed, which matters for scanning. The symbol is centred in its box.
+            let module_mm = if z.fixed_ratio {
+                dot_snap((w / width_mod).min(h / height_mod), dpi)
+            } else {
+                dot_snap(w / width_mod, dpi)
+            };
+            let k = module_mm / unit;
+            let ox = x + (w - z.width * k) / 2.0;
+            let oy = y + (h - z.height * k) / 2.0;
+            let _ = write!(
+                s,
+                r#"<g color="{}" transform="translate({} {}) scale({})">{}</g>"#,
+                esc(&b.color), n(ox), n(oy), format!("{:.6}", k), z.fragment
+            );
         }
     }
     Ok(())
@@ -254,8 +245,8 @@ mod tests {
             Kind::Ellipse(Shape::default()),
             Kind::Line(Shape::default()),
             Kind::Barcode(Barcode::default()),
-            Kind::Barcode(Barcode { symbology: Symbology::Qr, ..Default::default() }),
-            Kind::Barcode(Barcode { symbology: Symbology::Ean13, data: "abc".into(), ..Default::default() }),
+            Kind::Barcode(Barcode { symbology: "qr".into(), ..Default::default() }),
+            Kind::Barcode(Barcode { symbology: "ean13".into(), data: "abc".into(), ..Default::default() }),
         ]
         .into_iter()
         .enumerate()

@@ -66,3 +66,8 @@ pub fn render_run(req: RunRequest) -> Result<Vec<RenderResponse>, String> {
     }
     Ok(out)
 }
+
+/// Barcode types for the UI: key, name, group and example data.
+pub fn symbologies() -> serde_json::Value {
+    serde_json::to_value(crate::barcode::SYMBOLOGIES).unwrap()
+}

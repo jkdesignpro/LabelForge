@@ -154,49 +154,46 @@ impl Default for Shape {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum Symbology {
-    #[default]
-    Code128,
-    Code39,
-    Code93,
-    Ean13,
-    Ean8,
-    Itf,
-    Qr,
-    #[serde(rename = "datamatrix")]
-    DataMatrix,
-}
-
-impl Symbology {
-    pub fn is_2d(self) -> bool {
-        matches!(self, Symbology::Qr | Symbology::DataMatrix)
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Barcode {
-    pub symbology: Symbology,
+    /// Symbology key, e.g. `code128`, `qr`, `gs1_datamatrix`. The full list
+    /// with names and example data is [`crate::barcode::SYMBOLOGIES`].
+    pub symbology: String,
     /// Data to encode. `{name}` is replaced by the value of variable `name`.
+    /// GS1 types take Application Identifiers in brackets, e.g.
+    /// `(01)09501101530003(17)261231(10)LOT42`.
     pub data: String,
-    /// Print the human-readable text under 1D barcodes.
+    /// Print the human-readable text (1D codes).
     pub show_text: bool,
+    /// Kept for files from 0.1; the text size now follows the barcode standard.
     pub text_size_pt: f64,
-    /// QR error correction: L, M, Q or H.
+    /// Error correction: QR/Micro QR `L` `M` `Q` `H`; Aztec `1`-`4`;
+    /// PDF417 security level `0`-`8`. Empty = automatic.
     pub qr_ecc: String,
+    /// PDF417/MicroPDF417 data columns, 0 = automatic.
+    pub columns: i32,
+    /// MaxiCode mode 2-6 (0 = automatic, mode 4).
+    pub maxi_mode: i32,
+    /// MaxiCode modes 2/3: postcode, country and service class, e.g. `152382802840001`.
+    pub maxi_primary: String,
+    /// Include the standard quiet zones inside the object box.
+    pub quiet_zone: bool,
     pub color: String,
 }
 
 impl Default for Barcode {
     fn default() -> Self {
         Barcode {
-            symbology: Symbology::Code128,
+            symbology: "code128".into(),
             data: "LF-0001".into(),
             show_text: true,
             text_size_pt: 8.0,
             qr_ecc: "M".into(),
+            columns: 0,
+            maxi_mode: 0,
+            maxi_primary: String::new(),
+            quiet_zone: false,
             color: "#000000".into(),
         }
     }
