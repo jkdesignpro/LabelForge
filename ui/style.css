@@ -80,3 +80,5 @@ dialog menu { display: flex; justify-content: flex-end; gap: 6px; padding: 0; ma
   #printroot svg { display: block; }
   body { background: #fff; margin: 0; }
 }
+details.rules { margin: 4px 0; }
+details.rules summary { cursor: pointer; color: var(--muted); font-size: 12px; }

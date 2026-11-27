@@ -1,6 +1,8 @@
 // LabelForge desktop app. Free software under the GNU AGPL v3 or later.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod settings;
+
 use labelforge_core::api;
 use labelforge_core::Label;
 use tauri_plugin_dialog::DialogExt;
@@ -88,6 +90,42 @@ async fn export_binary(app: tauri::AppHandle, format: String, name: String, req:
     Ok(Some(p.display().to_string()))
 }
 
+#[tauri::command]
+fn get_settings(app: tauri::AppHandle) -> settings::Settings {
+    settings::load(&app)
+}
+
+#[tauri::command]
+fn save_settings(app: tauri::AppHandle, settings: settings::Settings) -> Result<(), String> {
+    settings::save(&app, &settings)
+}
+
+/// Pick a folder (for the shared counter folder etc.).
+#[tauri::command]
+async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    Ok(app.dialog().file().blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| p.display().to_string()))
+}
+
+#[tauri::command]
+fn peek_counters(app: tauri::AppHandle, label: Label) -> Result<std::collections::HashMap<String, i64>, String> {
+    api::peek_counters(&settings::counter_dir(&app)?, &label)
+}
+
+#[tauri::command]
+fn reserve_counters(app: tauri::AppHandle, label: Label, quantity: u32) -> Result<std::collections::HashMap<String, i64>, String> {
+    api::reserve_counters(&settings::counter_dir(&app)?, &label, quantity)
+}
+
+#[tauri::command]
+fn list_counters(app: tauri::AppHandle) -> Result<Vec<(String, i64)>, String> {
+    Ok(labelforge_core::counters::list(&settings::counter_dir(&app)?))
+}
+
+#[tauri::command]
+fn set_counter(app: tauri::AppHandle, name: String, next: i64) -> Result<(), String> {
+    labelforge_core::counters::set(&settings::counter_dir(&app)?, &name, next)
+}
+
 /// Open the system print dialog for the current page (print view).
 #[tauri::command]
 fn print_page(window: tauri::WebviewWindow) -> Result<(), String> {
@@ -97,7 +135,7 @@ fn print_page(window: tauri::WebviewWindow) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![render, render_run, symbologies, example_label, open_label, save_label, export_file, export_binary, print_page])
+        .invoke_handler(tauri::generate_handler![render, render_run, symbologies, example_label, open_label, save_label, export_file, export_binary, print_page, get_settings, save_settings, pick_folder, peek_counters, reserve_counters, list_counters, set_counter])
         .run(tauri::generate_context!())
         .expect("error while running LabelForge");
 }

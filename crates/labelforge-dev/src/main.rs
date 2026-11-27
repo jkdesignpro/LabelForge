@@ -49,6 +49,7 @@ fn handle(mut s: TcpStream, root: &Path) -> std::io::Result<()> {
                 .and_then(api::render_run)
                 .map(|r| serde_json::to_value(r).unwrap()),
             "symbologies" => Ok(api::symbologies()),
+            "peek_counters" | "reserve_counters" | "list_counters" | "set_counter" => counters_cmd(&path[5..], req),
             // Binary results come back base64-encoded in a JSON string.
             "png" => serde_json::from_value(req).map_err(|e| e.to_string()).and_then(api::png).map(|b| serde_json::Value::String(b64(&b))),
             "pdf" => serde_json::from_value(req).map_err(|e| e.to_string()).and_then(api::pdf).map(|b| serde_json::Value::String(b64(&b))),
@@ -90,4 +91,22 @@ fn b64(data: &[u8]) -> String {
         }
     }
     out
+}
+
+fn counter_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/dev-counters")
+}
+
+fn counters_cmd(cmd: &str, req: serde_json::Value) -> Result<serde_json::Value, String> {
+    let label = || serde_json::from_value::<labelforge_core::Label>(req["label"].clone()).map_err(|e| e.to_string());
+    let d = counter_dir();
+    match cmd {
+        "peek_counters" => Ok(serde_json::to_value(api::peek_counters(&d, &label()?)?).unwrap()),
+        "reserve_counters" => Ok(serde_json::to_value(api::reserve_counters(&d, &label()?, req["quantity"].as_u64().unwrap_or(1) as u32)?).unwrap()),
+        "list_counters" => Ok(serde_json::to_value(labelforge_core::counters::list(&d)).unwrap()),
+        _ => {
+            labelforge_core::counters::set(&d, req["name"].as_str().unwrap_or(""), req["next"].as_i64().unwrap_or(1))?;
+            Ok(serde_json::Value::Null)
+        }
+    }
 }

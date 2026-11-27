@@ -63,9 +63,94 @@ fn n(v: f64) -> String {
 /// Render the whole label. Returns the SVG and a list of per-object errors
 /// (e.g. data a barcode cannot encode), which are also drawn in red.
 pub fn render_svg(label: &Label, values: &HashMap<String, String>, opt: &RenderOptions) -> (String, Vec<String>) {
+    let r = render_full(label, values, opt);
+    (r.svg, r.errors)
+}
+
+/// Where an object ended up after anchors and conditions.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct Placed {
+    pub id: String,
+    pub x_mm: f64,
+    pub y_mm: f64,
+    pub w_mm: f64,
+    pub h_mm: f64,
+    pub visible: bool,
+}
+
+pub struct Rendered {
+    pub svg: String,
+    pub errors: Vec<String>,
+    pub boxes: Vec<Placed>,
+}
+
+/// Evaluate conditions and anchors for every object.
+pub fn layout(label: &Label, values: &HashMap<String, String>) -> (Vec<Placed>, Vec<String>) {
+    let now = chrono::Local::now().naive_local();
+    let env = crate::expr::Env { vars: values, now };
+    let mut errors = Vec::new();
+    let visible: Vec<bool> = label
+        .objects
+        .iter()
+        .map(|o| match crate::expr::condition(&o.condition, &env) {
+            Ok(v) => v,
+            Err(e) => {
+                errors.push(format!("{}: condition: {e}", o.id));
+                true
+            }
+        })
+        .collect();
+    let idx: HashMap<&str, usize> = label.objects.iter().enumerate().map(|(i, o)| (o.id.as_str(), i)).collect();
+    let mut pos: Vec<Option<(f64, f64)>> = vec![None; label.objects.len()];
+    fn place(
+        i: usize, label: &Label, idx: &HashMap<&str, usize>, visible: &[bool], pos: &mut Vec<Option<(f64, f64)>>,
+        depth: usize, errors: &mut Vec<String>,
+    ) -> (f64, f64) {
+        if let Some(p) = pos[i] {
+            return p;
+        }
+        let o = &label.objects[i];
+        let mut p = (o.x_mm, o.y_mm);
+        if let Some(a) = &o.anchor {
+            match idx.get(a.to.as_str()) {
+                Some(&t) if t != i && depth < 32 => {
+                    let tp = place(t, label, idx, visible, pos, depth + 1, errors);
+                    let to = &label.objects[t];
+                    let shown = visible[t];
+                    p.0 = match a.horizontal.as_str() {
+                        "right" if shown => tp.0 + to.w_mm + o.x_mm,
+                        "right" => tp.0,
+                        "left" => tp.0 + o.x_mm,
+                        _ => o.x_mm,
+                    };
+                    p.1 = match a.vertical.as_str() {
+                        "below" if shown => tp.1 + to.h_mm + o.y_mm,
+                        "below" => tp.1,
+                        "top" => tp.1 + o.y_mm,
+                        _ => o.y_mm,
+                    };
+                }
+                Some(_) => errors.push(format!("{}: anchor loop", o.id)),
+                None if a.to.is_empty() => {}
+                None => errors.push(format!("{}: anchored to missing object '{}'", o.id, a.to)),
+            }
+        }
+        pos[i] = Some(p);
+        p
+    }
+    let mut out = Vec::new();
+    for i in 0..label.objects.len() {
+        let (x, y) = place(i, label, &idx, &visible, &mut pos, 0, &mut errors);
+        let o = &label.objects[i];
+        out.push(Placed { id: o.id.clone(), x_mm: x, y_mm: y, w_mm: o.w_mm, h_mm: o.h_mm, visible: visible[i] });
+    }
+    (out, errors)
+}
+
+pub fn render_full(label: &Label, values: &HashMap<String, String>, opt: &RenderOptions) -> Rendered {
     let (w, h) = (label.width_mm, label.height_mm);
     let mut s = String::new();
-    let mut errors = Vec::new();
+    let (boxes, mut errors) = layout(label, values);
     let _ = write!(
         s,
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}">"#,
@@ -81,9 +166,16 @@ pub fn render_svg(label: &Label, values: &HashMap<String, String>, opt: &RenderO
             r = n(label.corner_radius_mm)
         );
     }
-    for obj in &label.objects {
+    for (orig, b) in label.objects.iter().zip(&boxes) {
+        // Hidden objects are left out of prints; the designer shows them faintly.
+        if !b.visible && !opt.outline {
+            continue;
+        }
+        let mut obj = orig.clone();
+        obj.x_mm = b.x_mm;
+        obj.y_mm = b.y_mm;
         let mut body = String::new();
-        if let Err(e) = render_object(obj, values, label.dpi, &mut body) {
+        if let Err(e) = render_object(&obj, values, label.dpi, &mut body) {
             errors.push(format!("{}: {}", obj.id, e));
             let _ = write!(
                 body,
@@ -92,15 +184,16 @@ pub fn render_svg(label: &Label, values: &HashMap<String, String>, opt: &RenderO
                 n(obj.x_mm + 0.8), n(obj.y_mm + 2.8), esc(&e)
             );
         }
+        let faint = if b.visible { "" } else { r#" opacity="0.25""# };
         if obj.rotation.rem_euclid(360.0) != 0.0 {
             let (cx, cy) = (obj.x_mm + obj.w_mm / 2.0, obj.y_mm + obj.h_mm / 2.0);
-            let _ = write!(s, r#"<g data-id="{}" transform="rotate({} {} {})">{}</g>"#, esc(&obj.id), n(obj.rotation), n(cx), n(cy), body);
+            let _ = write!(s, r#"<g data-id="{}"{} transform="rotate({} {} {})">{}</g>"#, esc(&obj.id), faint, n(obj.rotation), n(cx), n(cy), body);
         } else {
-            let _ = write!(s, r#"<g data-id="{}">{}</g>"#, esc(&obj.id), body);
+            let _ = write!(s, r#"<g data-id="{}"{}>{}</g>"#, esc(&obj.id), faint, body);
         }
     }
     s.push_str("</svg>");
-    (s, errors)
+    Rendered { svg: s, errors, boxes }
 }
 
 fn render_object(o: &Object, values: &HashMap<String, String>, dpi: u32, s: &mut String) -> Result<(), String> {
@@ -261,6 +354,31 @@ mod tests {
         assert!(svg.contains("&lt;&amp;&gt;"));
         assert_eq!(errs.len(), 1, "EAN-13 with letters must report an error: {errs:?}");
         assert!(errs[0].starts_with("o6"));
+    }
+
+    #[test]
+    fn conditions_and_anchors() {
+        let mut l = Label::default();
+        let t = |id: &str, y: f64| Object { id: id.into(), x_mm: 2.0, y_mm: y, w_mm: 30.0, h_mm: 5.0, ..Default::default() };
+        let mut a = t("a", 2.0);
+        a.condition = "NOT EMPTY(lot)".into();
+        let mut b = t("b", 1.0);
+        b.anchor = Some(Anchor { to: "a".into(), horizontal: "none".into(), vertical: "below".into() });
+        let mut c = t("c", 0.0);
+        c.anchor = Some(Anchor { to: "a".into(), horizontal: "right".into(), vertical: "top".into() });
+        l.objects = vec![b, a, c]; // order must not matter
+        let mut v = HashMap::new();
+        v.insert("lot".to_string(), "L42".to_string());
+        let (boxes, errs) = layout(&l, &v);
+        assert!(errs.is_empty(), "{errs:?}");
+        assert_eq!((boxes[0].y_mm, boxes[1].visible), (2.0 + 5.0 + 1.0, true)); // b below a + 1 mm gap
+        assert_eq!((boxes[2].x_mm, boxes[2].y_mm), (2.0 + 30.0 + 2.0, 2.0));
+        v.insert("lot".to_string(), "".to_string());
+        let (boxes, _) = layout(&l, &v);
+        assert!(!boxes[1].visible);
+        assert_eq!(boxes[0].y_mm, 2.0); // b moves up into a's place
+        let (svg, _) = render_svg(&l, &v, &RenderOptions { outline: false });
+        assert!(!svg.contains(r#"data-id="a""#));
     }
 
     #[test]

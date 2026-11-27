@@ -67,7 +67,34 @@ pub struct Object {
     /// Rotation in degrees, clockwise, about the object's centre.
     pub rotation: f64,
     pub locked: bool,
+    /// Print this object only when the formula is true (empty = always),
+    /// e.g. `material = "303"` or `NOT EMPTY(lot)`.
+    pub condition: String,
+    /// Position relative to another object instead of fixed X/Y.
+    pub anchor: Option<Anchor>,
+    /// Objects with the same group name are selected and moved together.
+    pub group: String,
     pub kind: Kind,
+}
+
+/// Relative positioning. The anchored object's X/Y are then offsets from the
+/// target. If the target is hidden by its condition, the anchored object
+/// takes the target's place (so the layout closes up).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Anchor {
+    pub to: String,
+    /// `right` (place to the right of the target), `left` (align left
+    /// edges) or `none` (keep own X).
+    pub horizontal: String,
+    /// `below`, `top` (align top edges) or `none`.
+    pub vertical: String,
+}
+
+impl Default for Anchor {
+    fn default() -> Self {
+        Anchor { to: String::new(), horizontal: "none".into(), vertical: "below".into() }
+    }
 }
 
 impl Default for Object {
@@ -80,6 +107,9 @@ impl Default for Object {
             h_mm: 10.0,
             rotation: 0.0,
             locked: false,
+            condition: String::new(),
+            anchor: None,
+            group: String::new(),
             kind: Kind::Text(Text::default()),
         }
     }
@@ -212,12 +242,14 @@ pub struct Variable {
 pub enum VarSource {
     /// A fixed value.
     Fixed { value: String },
-    /// Asked for when printing.
+    /// Asked for when printing, checked against `rules`.
     Prompt {
         #[serde(default)]
         prompt: String,
         #[serde(default)]
         default: String,
+        #[serde(default)]
+        rules: InputRules,
     },
     /// Generated from a pattern; see [`crate::pattern`].
     Serial {
@@ -227,8 +259,107 @@ pub enum VarSource {
         #[serde(default = "one")]
         step: i64,
     },
-    /// Current date/time from a pattern such as `{DD}/{MM}/{YYYY}`.
-    Date { pattern: String },
+    /// A counter shared by every label and computer that uses the same
+    /// counter folder, so numbers never repeat. `{SEQ}` in the pattern is
+    /// the counter value.
+    Global {
+        counter: String,
+        #[serde(default = "seq_pattern")]
+        pattern: String,
+        #[serde(default = "one")]
+        step: i64,
+    },
+    /// Current date/time from a pattern such as `{DD}/{MM}/{YYYY}`,
+    /// optionally shifted (e.g. expiry = today + 30 days).
+    Date {
+        pattern: String,
+        #[serde(default)]
+        offset_days: i64,
+        #[serde(default)]
+        offset_months: i64,
+    },
+    /// Computed with a formula; see [`crate::expr`].
+    Formula { expr: String },
+    /// A column of the label's data source (CSV, Excel, database, Odoo).
+    Field {
+        column: String,
+        #[serde(default)]
+        default: String,
+    },
+}
+
+/// Checks applied to a prompted value before printing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct InputRules {
+    pub required: bool,
+    pub min_len: u32,
+    /// 0 = no limit.
+    pub max_len: u32,
+    /// `any`, `digits`, `letters`, `alnum` or `custom` (use `allowed_chars`).
+    pub allowed: String,
+    pub allowed_chars: String,
+    /// Numeric range; both empty = not numeric.
+    pub min: String,
+    pub max: String,
+    /// Pick list: the value must be one of these (shown as a drop-down).
+    pub options: Vec<String>,
+    pub uppercase: bool,
+}
+
+impl InputRules {
+    /// Normalise (upper-case) and check a value. Returns the value to use.
+    pub fn check(&self, name: &str, value: &str) -> Result<String, String> {
+        let v = if self.uppercase { value.to_uppercase() } else { value.to_string() };
+        let len = v.chars().count() as u32;
+        if v.trim().is_empty() {
+            return if self.required { Err(format!("{name} is required")) } else { Ok(v) };
+        }
+        if len < self.min_len {
+            return Err(format!("{name} needs at least {} characters", self.min_len));
+        }
+        if self.max_len > 0 && len > self.max_len {
+            return Err(format!("{name} allows at most {} characters", self.max_len));
+        }
+        let ok = |f: &dyn Fn(char) -> bool| v.chars().all(f);
+        let good = match self.allowed.as_str() {
+            "digits" => ok(&|c| c.is_ascii_digit()),
+            "letters" => ok(&|c| c.is_alphabetic()),
+            "alnum" => ok(&|c| c.is_alphanumeric()),
+            "custom" => ok(&|c| self.allowed_chars.contains(c)),
+            _ => true,
+        };
+        if !good {
+            let what = match self.allowed.as_str() {
+                "digits" => "digits only".to_string(),
+                "letters" => "letters only".to_string(),
+                "alnum" => "letters and digits only".to_string(),
+                _ => format!("only these characters: {}", self.allowed_chars),
+            };
+            return Err(format!("{name}: {what}"));
+        }
+        if !self.min.is_empty() || !self.max.is_empty() {
+            let n: f64 = v.trim().parse().map_err(|_| format!("{name} must be a number"))?;
+            if let Ok(m) = self.min.parse::<f64>() {
+                if n < m {
+                    return Err(format!("{name} must be at least {}", self.min));
+                }
+            }
+            if let Ok(m) = self.max.parse::<f64>() {
+                if n > m {
+                    return Err(format!("{name} must be at most {}", self.max));
+                }
+            }
+        }
+        if !self.options.is_empty() && !self.options.iter().any(|o| o == &v) {
+            return Err(format!("{name} must be one of: {}", self.options.join(", ")));
+        }
+        Ok(v)
+    }
+}
+
+fn seq_pattern() -> String {
+    "{SEQ}".into()
 }
 
 fn one() -> i64 {
